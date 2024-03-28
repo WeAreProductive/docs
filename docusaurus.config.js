@@ -11,7 +11,7 @@ const config = {
   tagline: "Application-specific rollups with a Linux runtime.",
   url: "https://docs.cartesi.io",
   baseUrl: "/",
-  trailingSlash: true,
+  trailingSlash: undefined,
   onBrokenLinks: "ignore",
   onBrokenMarkdownLinks: "throw",
   favicon: "img/favicon.ico",
