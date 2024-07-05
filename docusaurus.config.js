@@ -1,9 +1,9 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-const lightCodeTheme = require("prism-react-renderer/themes/github");
-const darkCodeTheme = require("prism-react-renderer/themes/dracula");
-const replacementPlugin = require("./src/remark/replacement");
+const lightCodeTheme = require("prism-react-renderer").themes.github;
+const darkCodeTheme = require("prism-react-renderer").themes.dracula;
+const replacementPlugin = require("./src/remark/replacement").default;
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -341,7 +341,7 @@ const config = {
         routeBasePath: "cartesi-rollups",
         sidebarPath: require.resolve("./sidebarsRollups.js"),
         editUrl: "https://github.com/cartesi/docs/tree/main",
-        docLayoutComponent: "@theme/DocPage",
+        // docLayoutComponent: "@theme/DocPage",
         docItemComponent: "@theme/ApiItem",
         includeCurrentVersion: true,
         lastVersion: "current",
@@ -374,8 +374,8 @@ const config = {
             from: "/cartesi-rollups/",
           },
           {
-            to:"/cartesi-rollups/1.3/",
-            from:"/cartesi-rollups/overview"
+            to: "/cartesi-rollups/1.3/",
+            from: "/cartesi-rollups/overview",
           },
           {
             to: "/cartesi-machine/",

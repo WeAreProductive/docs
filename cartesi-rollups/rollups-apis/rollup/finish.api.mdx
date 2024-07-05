@@ -5,7 +5,7 @@ description: "The dApp backend should call this method to start processing rollu
 sidebar_label: "Finish and get next request"
 hide_title: true
 hide_table_of_contents: true
-api: {"operationId":"finish","description":"The dApp backend should call this method to start processing rollup requests.\nThe Rollup HTTP Server returns the next rollup request in the response body.\n\nThe possible values for the request_type field are 'advance_state' and 'inspect_state'.\nThe data field contains the rollup request input data.\nFor advance-state requests, the input data contains the advance-state metadata and the payload.\nFor inspect-state requests, the input data contains only the payload.\n\nAfter processing a rollup request, the dApp back-end should call again the finish method.\nFor advance-state requests, depending on the result of the request processing, it should fill the status field of the request body with 'accept' or 'reject'.\nThe Rollup HTTP Server ignores the content of the status field for the first finish request and after an inspect-state request.\n\nIf the advance-state request is rejected, the vouchers and notices are discarded.\nIn contrast, reports are not discarded in case of rejection.\nWhen running inside a Cartesi Machine, the Cartesi Server Manager reverts the entire state of the machine to what it was before receiving the request.\n\nDuring a finish call, the next rollup request might not be immediately available.\nWhen the dApp backend and the Rollup HTTP Server are running inside a Cartesi Machine, the Cartesi Server Manager pauses the whole machine execution until the next request is ready.\nWhen running in host mode, the Rollup HTTP Server returns the status code 202 after 10 seconds to avoid the connection timing out.\nWhen the Rollup HTTP Server returns 202, the dApp backend should retry the call to finish passing the same arguments as before.\n","requestBody":{"content":{"application/json":{"schema":{"type":"object","properties":{"status":{"type":"string","enum":["accept","reject"],"example":"accept"}},"title":"Finish"}}}},"responses":{"200":{"description":"Finish accepted and next rollup request returned.","content":{"application/json":{"schema":{"type":"object","properties":{"request_type":{"type":"string","enum":["advance_state","inspect_state"],"example":"advance_state"},"data":{"type":"object","oneOf":[{"type":"object","properties":{"metadata":{"type":"object","properties":{"msg_sender":{"type":"string","description":"20-byte address of the account that submitted the input.","example":"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"},"epoch_index":{"type":"integer","format":"uint64","description":"Deprecated. Always receives 0.","example":0},"input_index":{"type":"integer","format":"uint64","description":"Input index starting from genesis.","example":123},"block_number":{"type":"integer","format":"uint64","description":"Block number when input was posted.","example":10000000},"timestamp":{"type":"integer","format":"uint64","description":"Unix timestamp of block in milliseconds.","example":1588598533000}},"title":"Metadata"},"payload":{"type":"string","description":"The payload is in the Ethereum hex binary format.\nThe first two characters are '0x' followed by pairs of hexadecimal numbers that correspond to one byte.\nFor instance, '0xdeadbeef' corresponds to a payload with length 4 and bytes 222, 173, 190, 175.\nAn empty payload is represented by the string '0x'.\n","example":"0xdeadbeef","title":"Payload"}},"title":"Advance"},{"type":"object","properties":{"payload":{"type":"string","description":"The payload is in the Ethereum hex binary format.\nThe first two characters are '0x' followed by pairs of hexadecimal numbers that correspond to one byte.\nFor instance, '0xdeadbeef' corresponds to a payload with length 4 and bytes 222, 173, 190, 175.\nAn empty payload is represented by the string '0x'.\n","example":"0xdeadbeef","title":"Payload"}},"title":"Inspect"}]}},"title":"RollupRequest"}}}},"202":{"description":"Finish accepted but try again to obtain the next request."},"default":{"description":"Error response.","content":{"text/plain":{"schema":{"type":"string","description":"Detailed error message.","example":"The request could not be understood by the server due to malformed syntax","title":"Error"}}}}},"method":"post","path":"/finish","servers":[{"url":"https://<dapp_rollup_url>"},{"url":"http://localhost:5005/rollup"}],"jsonRequestBodyExample":{"status":"accept"},"info":{"title":"Cartesi Rollup HTTP API","version":"0.5.1","license":{"name":"Apache-2.0","url":"https://www.apache.org/licenses/LICENSE-2.0.html"},"description":"API that the Cartesi Rollup HTTP Server implements.\n\nIn the box below, there is an example of a dApp backend that uses the Rollup HTTP API.\n\n```\nimport requests\nimport sys\n\nrollup = sys.argv[1]\n\ndef check_status_code(response):\n    if response.status_code not in range(200, 300):\n        print(f'Error: invalid status code {response.status_code}')\n        sys.exit(1)\n    return response\n\nfinish = {'status': 'accept'}\nwhile True:\n    print('Sending finish')\n    r = check_status_code(requests.post(rollup + '/finish', json=finish))\n    if r.status_code == 202:\n        print('No pending rollup request, trying again')\n        continue\n\n    rollup_request = r.json()\n    if rollup_request['request_type'] == 'advance_state':\n        print('Sending voucher')\n        voucher = {\n            'destination': rollup_request['data']['metadata']['msg_sender'],\n            'payload': rollup_request['data']['payload']\n        }\n        check_status_code(requests.post(rollup + '/voucher', json=voucher))\n\n        print('Sending notice')\n        notice = {'payload': rollup_request['data']['payload']}\n        check_status_code(requests.post(rollup + '/notice', json=notice))\n\n        print('Sending report')\n        report = {'payload': rollup_request['data']['payload']}\n        check_status_code(requests.post(rollup + '/report', json=report))\n\n        finish['status'] = 'accept'\n\n    elif rollup_request['request_type'] == 'inspect_state':\n        print('Sending report per inspect request')\n        report = {'payload': rollup_request['data']['payload']}\n        check_status_code(requests.post(rollup + '/report', json=report))\n\n    else:\n        print('Throwing rollup exception')\n        exception = {'payload': rollup_request['data']['payload']}\n        requests.post(rollup + '/exception', json=exception)\n        break\n```\n\nIn production mode, if the dApp exits the Rollups initialization script will register a Rollup Exception.\nSee [/exception](#api-Default-registerException).\n\nIn host mode, the Cartesi Rollups infrastructure is not able to detect that the dApp exited.\nIt is up to the dApp developer to re-launch the dApp.\n"},"postman":{"name":"Finish and get next request","description":{"content":"The dApp backend should call this method to start processing rollup requests.\nThe Rollup HTTP Server returns the next rollup request in the response body.\n\nThe possible values for the request_type field are 'advance_state' and 'inspect_state'.\nThe data field contains the rollup request input data.\nFor advance-state requests, the input data contains the advance-state metadata and the payload.\nFor inspect-state requests, the input data contains only the payload.\n\nAfter processing a rollup request, the dApp back-end should call again the finish method.\nFor advance-state requests, depending on the result of the request processing, it should fill the status field of the request body with 'accept' or 'reject'.\nThe Rollup HTTP Server ignores the content of the status field for the first finish request and after an inspect-state request.\n\nIf the advance-state request is rejected, the vouchers and notices are discarded.\nIn contrast, reports are not discarded in case of rejection.\nWhen running inside a Cartesi Machine, the Cartesi Server Manager reverts the entire state of the machine to what it was before receiving the request.\n\nDuring a finish call, the next rollup request might not be immediately available.\nWhen the dApp backend and the Rollup HTTP Server are running inside a Cartesi Machine, the Cartesi Server Manager pauses the whole machine execution until the next request is ready.\nWhen running in host mode, the Rollup HTTP Server returns the status code 202 after 10 seconds to avoid the connection timing out.\nWhen the Rollup HTTP Server returns 202, the dApp backend should retry the call to finish passing the same arguments as before.\n","type":"text/plain"},"url":{"path":["finish"],"host":["{{baseUrl}}"],"query":[],"variable":[]},"header":[{"key":"Content-Type","value":"application/json"},{"key":"Accept","value":"application/json"}],"method":"POST","body":{"mode":"raw","raw":"\"\"","options":{"raw":{"language":"json"}}}}}
+api: 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
 sidebar_class_name: "post api-method"
 info_path: cartesi-rollups/rollups-apis/rollup/cartesi-rollup-http-api
 custom_edit_url: null
@@ -13,17 +13,31 @@ custom_edit_url: null
 
 import ApiTabs from "@theme/ApiTabs";
 import DiscriminatorTabs from "@theme/DiscriminatorTabs";
-import MethodEndpoint from "@theme/ApiDemoPanel/MethodEndpoint";
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import SecuritySchemes from "@theme/ApiExplorer/SecuritySchemes";
 import MimeTabs from "@theme/MimeTabs";
 import ParamsItem from "@theme/ParamsItem";
 import ResponseSamples from "@theme/ResponseSamples";
 import SchemaItem from "@theme/SchemaItem";
 import SchemaTabs from "@theme/SchemaTabs";
+import Markdown from "@theme/Markdown";
+import Heading from "@theme/Heading";
+import OperationTabs from "@theme/OperationTabs";
 import TabItem from "@theme/TabItem";
 
-<h1 className={"openapi__heading"}>Finish and get next request</h1>
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Finish and get next request"}
+>
+</Heading>
 
-<MethodEndpoint method={"post"} path={"/finish"}></MethodEndpoint>
+<MethodEndpoint
+  method={"post"}
+  path={"/finish"}
+>
+  
+</MethodEndpoint>
 
 
 
@@ -49,21 +63,347 @@ When running in host mode, the Rollup HTTP Server returns the status code 202 af
 When the Rollup HTTP Server returns 202, the dApp backend should retry the call to finish passing the same arguments as before.
 
 
-<MimeTabs className={"openapi-tabs__mime"}><TabItem label={"application/json"} value={"application/json-schema"}><details style={{}} className={"openapi-markdown__details"} data-collapsed={false} open={true}><summary style={{"textAlign":"left"}}><strong>Request Body</strong></summary><div style={{"textAlign":"left","marginLeft":"1rem"}}></div><ul style={{"marginLeft":"1rem"}}><SchemaItem collapsible={false} name={"status"} required={false} schemaName={"string"} qualifierMessage={"**Possible values:** [`accept`, `reject`]"} schema={{"type":"string","enum":["accept","reject"],"example":"accept"}}></SchemaItem></ul></details></TabItem></MimeTabs><div><div><ApiTabs><TabItem label={"200"} value={"200"}><div>
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+  children={"Request"}
+>
+</Heading>
 
-Finish accepted and next rollup request returned.
-
-</div><div><MimeTabs className={"openapi-tabs__mime"} schemaType={"response"}><TabItem label={"application/json"} value={"application/json"}><SchemaTabs className={"openapi-tabs__schema"}><TabItem label={"Schema"} value={"Schema"}><details style={{}} className={"openapi-markdown__details"} data-collapsed={false} open={true}><summary style={{"textAlign":"left"}}><strong>Schema</strong></summary><div style={{"textAlign":"left","marginLeft":"1rem"}}></div><ul style={{"marginLeft":"1rem"}}><SchemaItem collapsible={false} name={"request_type"} required={false} schemaName={"string"} qualifierMessage={"**Possible values:** [`advance_state`, `inspect_state`]"} schema={{"type":"string","enum":["advance_state","inspect_state"],"example":"advance_state"}}></SchemaItem><SchemaItem collapsible={true} className={"schemaItem"}><details style={{}} className={"openapi-markdown__details"}><summary style={{}}><strong>data</strong><span style={{"opacity":"0.6"}}> object</span></summary><div style={{"marginLeft":"1rem"}}><li><span className={"badge badge--info"}>oneOf</span><SchemaTabs className={"openapi-tabs__schema"}><TabItem label={"Advance"} value={"0-item-properties"}><SchemaItem collapsible={true} className={"schemaItem"}><details style={{}} className={"openapi-markdown__details"}><summary style={{}}><strong>metadata</strong><span style={{"opacity":"0.6"}}> object</span></summary><div style={{"marginLeft":"1rem"}}><SchemaItem collapsible={false} name={"msg_sender"} required={false} schemaName={"string"} qualifierMessage={undefined} schema={{"type":"string","description":"20-byte address of the account that submitted the input.","example":"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"}}></SchemaItem><SchemaItem collapsible={false} name={"epoch_index"} required={false} schemaName={"uint64"} qualifierMessage={undefined} schema={{"type":"integer","format":"uint64","description":"Deprecated. Always receives 0.","example":0}}></SchemaItem><SchemaItem collapsible={false} name={"input_index"} required={false} schemaName={"uint64"} qualifierMessage={undefined} schema={{"type":"integer","format":"uint64","description":"Input index starting from genesis.","example":123}}></SchemaItem><SchemaItem collapsible={false} name={"block_number"} required={false} schemaName={"uint64"} qualifierMessage={undefined} schema={{"type":"integer","format":"uint64","description":"Block number when input was posted.","example":10000000}}></SchemaItem><SchemaItem collapsible={false} name={"timestamp"} required={false} schemaName={"uint64"} qualifierMessage={undefined} schema={{"type":"integer","format":"uint64","description":"Unix timestamp of block in milliseconds.","example":1588598533000}}></SchemaItem></div></details></SchemaItem><SchemaItem collapsible={false} name={"payload"} required={false} schemaName={"Payload"} qualifierMessage={undefined} schema={{"type":"string","description":"The payload is in the Ethereum hex binary format.\nThe first two characters are '0x' followed by pairs of hexadecimal numbers that correspond to one byte.\nFor instance, '0xdeadbeef' corresponds to a payload with length 4 and bytes 222, 173, 190, 175.\nAn empty payload is represented by the string '0x'.\n","example":"0xdeadbeef","title":"Payload"}}></SchemaItem></TabItem><TabItem label={"Inspect"} value={"1-item-properties"}><SchemaItem collapsible={false} name={"payload"} required={false} schemaName={"Payload"} qualifierMessage={undefined} schema={{"type":"string","description":"The payload is in the Ethereum hex binary format.\nThe first two characters are '0x' followed by pairs of hexadecimal numbers that correspond to one byte.\nFor instance, '0xdeadbeef' corresponds to a payload with length 4 and bytes 222, 173, 190, 175.\nAn empty payload is represented by the string '0x'.\n","example":"0xdeadbeef","title":"Payload"}}></SchemaItem></TabItem></SchemaTabs></li></div></details></SchemaItem></ul></details></TabItem><TabItem label={"Example (from schema)"} value={"Example (from schema)"}><ResponseSamples responseExample={"{\n  \"request_type\": \"advance_state\",\n  \"data\": {\n    \"metadata\": {\n      \"msg_sender\": \"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\n      \"epoch_index\": 0,\n      \"input_index\": 123,\n      \"block_number\": 10000000,\n      \"timestamp\": 1588598533000\n    },\n    \"payload\": \"0xdeadbeef\"\n  }\n}"} language={"json"}></ResponseSamples></TabItem></SchemaTabs></TabItem></MimeTabs></div></TabItem><TabItem label={"202"} value={"202"}><div>
-
-Finish accepted but try again to obtain the next request.
-
-</div><div></div></TabItem><TabItem label={"default"} value={"default"}><div>
-
-Error response.
-
-</div><div><MimeTabs className={"openapi-tabs__mime"} schemaType={"response"}><TabItem label={"text/plain"} value={"text/plain"}><SchemaTabs className={"openapi-tabs__schema"}><TabItem label={"Schema"} value={"Schema"}><details style={{}} className={"openapi-markdown__details"} data-collapsed={false} open={true}><summary style={{"textAlign":"left"}}><strong>Schema</strong></summary><div style={{"textAlign":"left","marginLeft":"1rem"}}></div><ul style={{"marginLeft":"1rem"}}><li><div><strong>string</strong><div style={{"marginTop":"var(--ifm-table-cell-padding)"}}>
-
-Detailed error message.
-
-</div></div></li></ul></details></TabItem></SchemaTabs></TabItem></MimeTabs></div></TabItem></ApiTabs></div></div>
+<MimeTabs
+  className={"openapi-tabs__mime"}
+>
+  <TabItem
+    label={"application/json"}
+    value={"application/json-schema"}
+  >
+    <details
+      style={{}}
+      className={"openapi-markdown__details mime"}
+      data-collapsed={false}
+      open={true}
+    >
+      <summary
+        style={{}}
+        className={"openapi-markdown__details-summary-mime"}
+      >
+        <h3
+          className={"openapi-markdown__details-summary-header-body"}
+        >
+          Body
+        </h3>
+      </summary><div
+        style={{"textAlign":"left","marginLeft":"1rem"}}
+      >
+        
+      </div><ul
+        style={{"marginLeft":"1rem"}}
+      >
+        <SchemaItem
+          collapsible={false}
+          name={"status"}
+          required={false}
+          schemaName={"string"}
+          qualifierMessage={"**Possible values:** [`accept`, `reject`]"}
+          schema={{"type":"string","enum":["accept","reject"],"example":"accept"}}
+        >
+          
+        </SchemaItem>
+      </ul>
+    </details>
+  </TabItem>
+</MimeTabs><div>
+  <div>
+    <ApiTabs
+      label={undefined}
+      id={undefined}
+    >
+      <TabItem
+        label={"200"}
+        value={"200"}
+      >
+        <div>
+          
+          
+          Finish accepted and next rollup request returned.
+          
+          
+        </div><div>
+          <MimeTabs
+            className={"openapi-tabs__mime"}
+            schemaType={"response"}
+          >
+            <TabItem
+              label={"application/json"}
+              value={"application/json"}
+            >
+              <SchemaTabs
+                className={"openapi-tabs__schema"}
+              >
+                <TabItem
+                  label={"Schema"}
+                  value={"Schema"}
+                >
+                  <details
+                    style={{}}
+                    className={"openapi-markdown__details response"}
+                    data-collapsed={false}
+                    open={true}
+                  >
+                    <summary
+                      style={{}}
+                      className={"openapi-markdown__details-summary-response"}
+                    >
+                      <strong>
+                        Schema
+                      </strong>
+                    </summary><div
+                      style={{"textAlign":"left","marginLeft":"1rem"}}
+                    >
+                      
+                    </div><ul
+                      style={{"marginLeft":"1rem"}}
+                    >
+                      <SchemaItem
+                        collapsible={false}
+                        name={"request_type"}
+                        required={false}
+                        schemaName={"string"}
+                        qualifierMessage={"**Possible values:** [`advance_state`, `inspect_state`]"}
+                        schema={{"type":"string","enum":["advance_state","inspect_state"],"example":"advance_state"}}
+                      >
+                        
+                      </SchemaItem><SchemaItem
+                        collapsible={true}
+                        className={"schemaItem"}
+                      >
+                        <details
+                          style={{}}
+                          className={"openapi-markdown__details"}
+                        >
+                          <summary
+                            style={{}}
+                          >
+                            <strong>
+                              data
+                            </strong><span
+                              style={{"opacity":"0.6"}}
+                            >
+                               object
+                            </span>
+                          </summary><div
+                            style={{"marginLeft":"1rem"}}
+                          >
+                            
+                          </div><div>
+                            <span
+                              className={"badge badge--info"}
+                            >
+                              oneOf
+                            </span><SchemaTabs>
+                              <TabItem
+                                label={"Advance"}
+                                value={"0-item-properties"}
+                              >
+                                <SchemaItem
+                                  collapsible={true}
+                                  className={"schemaItem"}
+                                >
+                                  <details
+                                    style={{}}
+                                    className={"openapi-markdown__details"}
+                                  >
+                                    <summary
+                                      style={{}}
+                                    >
+                                      <span
+                                        className={"openapi-schema__container"}
+                                      >
+                                        <strong
+                                          className={"openapi-schema__property"}
+                                        >
+                                          metadata
+                                        </strong><span
+                                          className={"openapi-schema__name"}
+                                        >
+                                           object
+                                        </span>
+                                      </span>
+                                    </summary><div
+                                      style={{"marginLeft":"1rem"}}
+                                    >
+                                      <SchemaItem
+                                        collapsible={false}
+                                        name={"msg_sender"}
+                                        required={false}
+                                        schemaName={"string"}
+                                        qualifierMessage={undefined}
+                                        schema={{"type":"string","description":"20-byte address of the account that submitted the input.","example":"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"}}
+                                      >
+                                        
+                                      </SchemaItem><SchemaItem
+                                        collapsible={false}
+                                        name={"epoch_index"}
+                                        required={false}
+                                        schemaName={"uint64"}
+                                        qualifierMessage={undefined}
+                                        schema={{"type":"integer","format":"uint64","description":"Deprecated. Always receives 0.","example":0}}
+                                      >
+                                        
+                                      </SchemaItem><SchemaItem
+                                        collapsible={false}
+                                        name={"input_index"}
+                                        required={false}
+                                        schemaName={"uint64"}
+                                        qualifierMessage={undefined}
+                                        schema={{"type":"integer","format":"uint64","description":"Input index starting from genesis.","example":123}}
+                                      >
+                                        
+                                      </SchemaItem><SchemaItem
+                                        collapsible={false}
+                                        name={"block_number"}
+                                        required={false}
+                                        schemaName={"uint64"}
+                                        qualifierMessage={undefined}
+                                        schema={{"type":"integer","format":"uint64","description":"Block number when input was posted.","example":10000000}}
+                                      >
+                                        
+                                      </SchemaItem><SchemaItem
+                                        collapsible={false}
+                                        name={"timestamp"}
+                                        required={false}
+                                        schemaName={"uint64"}
+                                        qualifierMessage={undefined}
+                                        schema={{"type":"integer","format":"uint64","description":"Unix timestamp of block in milliseconds.","example":1588598533000}}
+                                      >
+                                        
+                                      </SchemaItem>
+                                    </div>
+                                  </details>
+                                </SchemaItem><SchemaItem
+                                  collapsible={false}
+                                  name={"payload"}
+                                  required={false}
+                                  schemaName={"Payload (string)"}
+                                  qualifierMessage={undefined}
+                                  schema={{"type":"string","description":"The payload is in the Ethereum hex binary format.\nThe first two characters are '0x' followed by pairs of hexadecimal numbers that correspond to one byte.\nFor instance, '0xdeadbeef' corresponds to a payload with length 4 and bytes 222, 173, 190, 175.\nAn empty payload is represented by the string '0x'.\n","example":"0xdeadbeef","title":"Payload"}}
+                                >
+                                  
+                                </SchemaItem>
+                              </TabItem><TabItem
+                                label={"Inspect"}
+                                value={"1-item-properties"}
+                              >
+                                <SchemaItem
+                                  collapsible={false}
+                                  name={"payload"}
+                                  required={false}
+                                  schemaName={"Payload (string)"}
+                                  qualifierMessage={undefined}
+                                  schema={{"type":"string","description":"The payload is in the Ethereum hex binary format.\nThe first two characters are '0x' followed by pairs of hexadecimal numbers that correspond to one byte.\nFor instance, '0xdeadbeef' corresponds to a payload with length 4 and bytes 222, 173, 190, 175.\nAn empty payload is represented by the string '0x'.\n","example":"0xdeadbeef","title":"Payload"}}
+                                >
+                                  
+                                </SchemaItem>
+                              </TabItem>
+                            </SchemaTabs>
+                          </div>
+                        </details>
+                      </SchemaItem>
+                    </ul>
+                  </details>
+                </TabItem><TabItem
+                  label={"Example (from schema)"}
+                  value={"Example (from schema)"}
+                >
+                  <ResponseSamples
+                    responseExample={"{\n  \"request_type\": \"advance_state\",\n  \"data\": {}\n}"}
+                    language={"json"}
+                  >
+                    
+                  </ResponseSamples>
+                </TabItem>
+              </SchemaTabs>
+            </TabItem>
+          </MimeTabs>
+        </div>
+      </TabItem><TabItem
+        label={"202"}
+        value={"202"}
+      >
+        <div>
+          
+          
+          Finish accepted but try again to obtain the next request.
+          
+          
+        </div><div>
+          
+        </div>
+      </TabItem><TabItem
+        label={"default"}
+        value={"default"}
+      >
+        <div>
+          
+          
+          Error response.
+          
+          
+        </div><div>
+          <MimeTabs
+            className={"openapi-tabs__mime"}
+            schemaType={"response"}
+          >
+            <TabItem
+              label={"text/plain"}
+              value={"text/plain"}
+            >
+              <SchemaTabs
+                className={"openapi-tabs__schema"}
+              >
+                <TabItem
+                  label={"Schema"}
+                  value={"Schema"}
+                >
+                  <details
+                    style={{}}
+                    className={"openapi-markdown__details response"}
+                    data-collapsed={false}
+                    open={true}
+                  >
+                    <summary
+                      style={{}}
+                      className={"openapi-markdown__details-summary-response"}
+                    >
+                      <strong>
+                        Schema
+                      </strong>
+                    </summary><div
+                      style={{"textAlign":"left","marginLeft":"1rem"}}
+                    >
+                      
+                    </div><ul
+                      style={{"marginLeft":"1rem"}}
+                    >
+                      <div
+                        style={{"marginTop":".5rem","marginBottom":".5rem"}}
+                      >
+                        
+                        
+                        string
+                        
+                        
+                      </div>
+                    </ul>
+                  </details>
+                </TabItem>
+              </SchemaTabs>
+            </TabItem>
+          </MimeTabs>
+        </div>
+      </TabItem>
+    </ApiTabs>
+  </div>
+</div>
       
